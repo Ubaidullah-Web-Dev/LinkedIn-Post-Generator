@@ -165,3 +165,8 @@ cython_debug/
 # Configuration file
 config.json
 test/
+
+# Application Specific
+automator.db
+media/*.png
+=10.0.0
