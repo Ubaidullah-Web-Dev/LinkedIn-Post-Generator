@@ -1,0 +1,8 @@
+openai == 1.73.0
+beautifulsoup4
+requests
+schedule
+feedparser
+Pillow>=10.0.0
+rich
+textual
