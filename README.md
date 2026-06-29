@@ -43,12 +43,11 @@ Download the project to your computer using Git:
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/linkedin-post-automator.git
+git clone https://github.com/Ubaidullah-Web-Dev/LinkedIn-Post-Generator.git
 
 # Navigate into the project folder
-cd linkedin-post-automator
+cd LinkedIn-Post-Generator
 ```
-*(Make sure to replace `YOUR_USERNAME` with the actual GitHub username/URL if copying this directly!)*
 
 ---
 
