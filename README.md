@@ -198,9 +198,38 @@ OPENAI_API_KEY=your_openai_key
 <summary>🍪 <b>How to get your LinkedIn cookies</b></summary>
 <br/>
 
-1. Go to LinkedIn in your browser and log in.
-2. Open Developer Tools (`F12`) → **Application** tab → **Cookies** → `www.linkedin.com`.
-3. Copy the values for `li_at` and `JSESSIONID` into your `.env` file.
+To allow the automator to post on your behalf, you need to extract your session cookies.
+1. Open your browser and log into [LinkedIn](https://www.linkedin.com).
+2. Open Developer Tools (Press `F12` or `Ctrl+Shift+I` / `Cmd+Option+I` on Mac).
+3. Navigate to the cookies list:
+   - **Chrome / Edge / Brave / Opera**: Go to the **Application** tab → **Storage** (left sidebar) → **Cookies** → click `https://www.linkedin.com`.
+   - **Firefox**: Go to the **Storage** tab → **Cookies** → click `https://www.linkedin.com`.
+   - **Safari**: Go to the **Storage** tab (enable developer menu in settings first) → **Cookies** → click `www.linkedin.com`.
+4. Search for these two cookies in the filter box:
+   - **`li_at`**: A long alphanumeric string (lasts ~1 year). Copy this value.
+   - **`JSESSIONID`**: A string looking like `ajax:123456789...`. Copy this value (include the double quotes if present, e.g., `"ajax:12345"`).
+5. Paste these into your `.env` file as `LI_AT` and `JSESSIONID`.
+
+</details>
+
+<details>
+<summary>🔑 <b>How to get your AI API Keys</b></summary>
+<br/>
+
+You need at least one API key to generate post content:
+
+- **OpenRouter (Recommended)**: 
+  1. Sign up/Log in at [OpenRouter.ai](https://openrouter.ai/).
+  2. Go to **Settings / Keys** or [openrouter.ai/keys](https://openrouter.ai/keys).
+  3. Click **Create Key**, give it a name, and copy the key (it starts with `sk-or-`).
+- **Google Gemini**:
+  1. Go to [Google AI Studio](https://aistudio.google.com/).
+  2. Click **Get API key** in the top left.
+  3. Click **Create API key** (you can create it in a new or existing Google Cloud project).
+- **OpenAI**:
+  1. Go to the [OpenAI Platform](https://platform.openai.com/).
+  2. Navigate to **API Keys** in the left sidebar.
+  3. Click **Create new secret key** and copy it (starts with `sk-proj-`).
 
 </details>
 
