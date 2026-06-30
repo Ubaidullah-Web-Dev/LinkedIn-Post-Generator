@@ -1,12 +1,21 @@
-# 🚀 LinkedIn Post Automator (Enterprise Edition)
+```text
+    __    ___ 
+   / /   /   |
+  / /   / /| |
+ / /___/ ___ |
+/_____/_/  |_|
+```
+
+# 🚀 LinkedIn Post Automator (v2.5 Enterprise)
 
 A fully automated, terminal-based GUI (TUI) application to generate and schedule high-quality LinkedIn posts. 
 
 Features:
-- **Beautiful Terminal UI**: Built with Textual, featuring a fully interactive dashboard.
+- **Beautiful Terminal UI**: Built with Textual, featuring a fully interactive dashboard and compact ASCII aesthetics.
 - **Dynamic Content**: Uses advanced AI prompting to avoid generic, robotic text.
-- **Premium Infographics**: Automatically generates stunning glassmorphism comparison tables, scene cards, and tips lists.
-- **SQLite Database**: Robust background queueing and draft saving.
+- **Premium Infographics (v2.5)**: A deterministic visual engine powered by Python PIL and NumPy. Features 7 robust templates (Quote Cards, Step Flows, Code Snippets, etc.) and 5 gorgeous color themes with frosted glassmorphism.
+- **SQLite Database**: Robust background queueing, thread-safe WAL mode, and draft saving.
+- **Config Hardening**: Secure secret management using `.env` files.
 - **Multi-Model Support**: Failover system across OpenRouter, Gemini, OpenAI, and Pollinations.
 
 ---
@@ -66,7 +75,7 @@ source venv/bin/activate
 ---
 
 ### Step 4: Install Dependencies
-Now, install all the required Python libraries for the app to function (like `textual` for the UI and `Pillow` for the graphics).
+Now, install all the required Python libraries for the app to function (like `textual` for the UI, `Pillow` and `NumPy` for the graphics, and `python-dotenv` for secrets).
 
 ```bash
 pip install -r requirements.txt
@@ -74,24 +83,34 @@ pip install -r requirements.txt
 
 ---
 
-### Step 5: Configuration Setup
-The app needs your API keys and LinkedIn session cookies to work. 
+### Step 5: Configuration Setup (Secured via .env)
+The app needs your API keys and LinkedIn session cookies to work. We use a `.env` file to keep these secure.
 
-1. Copy the example configuration file to create your active config:
+1. Create a `.env` file in the root of the project:
    ```bash
-   cp example_config.json config.json
+   touch .env
    ```
 
-2. Open `config.json` in a text editor (like `nano config.json` or VSCode).
+2. Open `.env` in a text editor (like `nano .env` or VSCode).
 
 3. Fill in your credentials:
-   - **`openrouter_api_key`**: Get one from [OpenRouter.ai](https://openrouter.ai/) (Used for text generation).
-   - **`gemini_api_key`**: Get one from [Google AI Studio](https://aistudio.google.com/) (Optional, used as a fallback).
-   - **`open_ai_key`**: Get one from [OpenAI](https://platform.openai.com/) (Optional).
-   - **`li_at`** and **`JSESSIONID`**: These are your LinkedIn cookies required to post. 
-     - Go to LinkedIn in your browser.
-     - Open Developer Tools (F12) -> Application -> Cookies -> `www.linkedin.com`.
-     - Copy the values for `li_at` and `JSESSIONID` and paste them into the config file.
+   ```env
+   # Required for posting
+   LI_AT=your_linkedin_li_at_cookie
+   JSESSIONID=your_linkedin_jsessionid_cookie
+
+   # Required for AI text generation (pick at least one)
+   OPENROUTER_API_KEY=your_openrouter_key
+   GEMINI_API_KEY=your_gemini_key
+   OPENAI_API_KEY=your_openai_key
+   ```
+   
+   *To get your LinkedIn cookies:*
+   - Go to LinkedIn in your browser.
+   - Open Developer Tools (F12) -> Application -> Cookies -> `www.linkedin.com`.
+   - Copy the values for `li_at` and `JSESSIONID`.
+
+*(Optional: You can still copy `example_config.json` to `config.json` to configure non-secret settings like your bio, websites, and default token limits).*
 
 ---
 
@@ -104,4 +123,4 @@ python main.py
 
 ### 💡 Troubleshooting
 - **Command Not Found**: If `python` doesn't work, try running `python3 main.py` instead.
-- **Images looking weird?** Don't use the "Auto" generator if you only want infographics. Inside the app, change the Image Generator dropdown to **"Infographic Only"**.
+- **Images looking weird?** By default, the system uses the new deterministic Infographic engine (`template_only`). If you select `ai_only` or `hybrid`, the AI image generation might produce unpredictable results. Stick to the built-in templates for professional visuals!
