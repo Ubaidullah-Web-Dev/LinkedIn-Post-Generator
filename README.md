@@ -229,7 +229,6 @@ python main.py
 
 ## 🗺️ Roadmap
 
-- [ ] Screenshots & demo GIF
 - [ ] Additional infographic templates
 - [ ] Windows / macOS setup guide
 - [ ] Docker support
