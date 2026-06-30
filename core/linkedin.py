@@ -1,205 +1,234 @@
-import requests
+"""
+core/linkedin.py — LinkedIn API client.
+
+v2 rewrite:
+- post() and post_file() return tuple[bool, str] (no silent failures)
+- File handle leak fixed (context manager for uploads)
+- Unused fbinary removed, dead code removed
+- Proper logging instead of custom_print()
+- Full type hints
+"""
+
+from __future__ import annotations
+
 import json
-from os import path
-from utils import custom_print, get_content_type, get_file_data, MEDIA_CATEGORY
+import mimetypes
+import os
+from pathlib import Path
 from re import sub
-from urllib.parse import quote
+
+import requests
+
+from core.constants import LINKEDIN_CHAR_LIMIT, MediaCategory
+from core.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class ContentTooLong(requests.RequestException):
-    """ LinkedIn post limit reached """
+    """LinkedIn post character limit exceeded."""
     pass
 
 
 class LinkedIn:
-    POST_CHAR_LIMIT     = 3000
+    """LinkedIn API client for posting text and images."""
 
-    BASE_URL            = "https://www.linkedin.com"
+    BASE_URL = "https://www.linkedin.com"
+    POST_ENDPOINT = BASE_URL + "/voyager/api/contentcreation/normShares"
+    UPLOAD_ENDPOINT = BASE_URL + "/voyager/api/voyagerVideoDashMediaUploadMetadata?action=upload"
 
-    POST_ENDPOINT       = BASE_URL + "/voyager/api/contentcreation/normShares"
-    UPLOAD_ENDPOINT     = BASE_URL + "/voyager/api/voyagerVideoDashMediaUploadMetadata?action=upload"
-
-    def __init__(self, cookies, config_fname='../config.json'):
-        self.config_fname = config_fname
-        self.cookies      = { key: value.strip() if isinstance(value, str) else value for key, value in cookies.items() }
-
-        if '\"' in cookies["JSESSIONID"]:
-            self.cookies["JSESSIONID"] = sub( r'\"+', '', cookies["JSESSIONID"] )
-
-        self.headers = {
-            "accept"            : "application/vnd.linkedin.normalized+json+2.1",
-            "accept-language"   : "en-US,en;q=0.9",
-            "content-type"      : "application/json; charset=UTF-8",
-            "csrf-token"        : self.cookies["JSESSIONID"],
-            "origin"            : self.BASE_URL,
-            "cookie"            : '; '.join([f'{key}="{value}"' if key == "JSESSIONID" else f'{key}={value}' for key, value in self.cookies.items()]),
-            "Referer"           : self.BASE_URL + "/feed/",
-            "Referrer-Policy"   : "strict-origin-when-cross-origin, strict-origin-when-cross-origin",
-            "User-Agent"        : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0"
-            # ... other headers ...
+    def __init__(self, cookies: dict[str, str]) -> None:
+        self.cookies: dict[str, str] = {
+            key: value.strip() if isinstance(value, str) else value
+            for key, value in cookies.items()
         }
 
-        self.member_id = ''
+        # Clean JSESSIONID quotes
+        jsid = self.cookies.get("JSESSIONID", "")
+        if '\\"' in jsid:
+            self.cookies["JSESSIONID"] = sub(r'\\"+', "", jsid)
 
-    def update_cookies(self):
-        # Update the cookies in the headers
-        self.headers["cookie"] = '; '.join(
-            [f'{key}="{value}"' if key == "JSESSIONID" else f'{key}={value}' for key, value in self.cookies.items()])
+        self.headers: dict[str, str] = {
+            "accept": "application/vnd.linkedin.normalized+json+2.1",
+            "accept-language": "en-US,en;q=0.9",
+            "content-type": "application/json; charset=UTF-8",
+            "csrf-token": self.cookies.get("JSESSIONID", ""),
+            "origin": self.BASE_URL,
+            "cookie": self._build_cookie_header(),
+            "Referer": self.BASE_URL + "/feed/",
+            "Referrer-Policy": "strict-origin-when-cross-origin",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0"
+            ),
+        }
 
-        # Update the cookies in the config file
-        dir_path    = path.dirname(path.realpath(__file__))   # Gets the directory where the script is located
-        config_path = path.join(dir_path, self.config_fname)  # Constructs the path to the config file
-        try:
-            with open(config_path, 'r') as file:
-                config = json.load(file)
+    def _build_cookie_header(self) -> str:
+        """Build the Cookie header string from the cookies dict."""
+        parts = []
+        for key, value in self.cookies.items():
+            if key == "JSESSIONID":
+                parts.append(f'{key}="{value}"')
+            else:
+                parts.append(f"{key}={value}")
+        return "; ".join(parts)
 
-            config['cookies'] = self.cookies
+    # ── Posting ──────────────────────────────────────────────────────────
 
-            with open(config_path, 'w') as file:
-                json.dump(config, file, indent=4)
+    def post(
+        self, text: str, media: list[dict] | None = None
+    ) -> tuple[bool, str]:
+        """
+        Post text (with optional media) to LinkedIn.
 
-            print("Cookies updated in config file.")
-
-        except (FileNotFoundError, IOError) as e:
-            print(f"Error updating config file: {e}")
-
-    def check_session(self, resp_headers=None ):
-        try:
-            if not resp_headers:
-                response = requests.get(self.BASE_URL, headers=self.headers)
-                response.raise_for_status()
-
-                resp_headers = response.headers
-
-            if "Set-Cookie" in resp_headers and "li_at=" in resp_headers['Set-Cookie']:
-
-                cookie_parts  = resp_headers['Set-Cookie'].split(';')
-                has_updates   = False
-
-                for cookie_key in [
-                    "JSESSIONID",
-                    "li_at"
-                ]:
-                    if f"{cookie_key}=" in resp_headers['Set-Cookie']:
-                        # Extracting the cookie value
-                        found_cookie = next( ( part for part in cookie_parts if f"{cookie_key}=" in part ), None)
-
-                        if found_cookie:
-
-                            # Extract the value
-                            new_cookie_value = found_cookie.split(f"{cookie_key}=")[1].split(';')[0].strip().replace('\"', '')
-
-                            if new_cookie_value and self.cookies[cookie_key] != new_cookie_value:
-                                # Update the configuration with the new cookie
-                                self.cookies[cookie_key] = new_cookie_value
-                                has_updates = True
-
-                if has_updates:
-                    self.update_cookies()
-
-        except requests.exceptions.RequestException as e:
-            custom_print(f"Error checking LinkedIn session: {e}")
-
-    # def get_recent_posts(self, count=1):
-    #     get_posts_endpoint = self.BASE_URL + "/voyager/api/graphql?variables=" \
-    #                                          "(count:" + str(count) + ",start:0,profileUrn:" + self.member_id + ")" \
-    #                                          "&queryId=voyagerFeedDashProfileUpdates.d50d324a655e6bbeff4e0490ffde19d1"
-    #
-    #     try:
-    #         response = requests.get(get_posts_endpoint, headers=self.headers)
-    #
-    #         response.raise_for_status()
-    #         # Handle response
-    #
-    #         self.check_session(response.headers)
-    #
-    #     except requests.exceptions.RequestException as e:
-    #         custom_print(f"Error retrieving recent LinkedIn posts: {e}")
-
-    def post(self, text, media=None):
-
+        Returns (success, message).
+        """
         if media is None:
             media = []
+
+        if len(text) > LINKEDIN_CHAR_LIMIT:
+            return False, f"Post too long ({len(text)} chars, limit {LINKEDIN_CHAR_LIMIT})."
 
         payload = {
             "visibleToConnectionsOnly": False,
             "externalAudienceProviders": [],
-            "commentaryV2": {
-                "text": text,
-                "attributes": []
-            },
+            "commentaryV2": {"text": text, "attributes": []},
             "origin": "FEED",
             "allowedCommentersScope": "ALL",
             "postState": "PUBLISHED",
-            "media": media
+            "media": media,
         }
 
         try:
-
-            if len(text) > self.POST_CHAR_LIMIT:
-                raise ContentTooLong()
-
-            response = requests.post(self.POST_ENDPOINT, headers=self.headers, json=payload)
-
+            response = requests.post(
+                self.POST_ENDPOINT, headers=self.headers, json=payload, timeout=30
+            )
             response.raise_for_status()
-            # Handle response
+            self._check_session(response.headers)
+            logger.info("Successfully posted to LinkedIn")
+            return True, "Posted to LinkedIn successfully."
 
-            self.check_session(response.headers)
-
-        except ContentTooLong:
-            custom_print(f"Error posting to LinkedIn: post character limit reached")
         except requests.exceptions.RequestException as e:
-            custom_print(f"Error posting to LinkedIn: {e}")
+            msg = f"Error posting to LinkedIn: {e}"
+            logger.error(msg)
+            return False, msg
 
-    def post_file(self, text, file_path_list=None):
+    def post_file(
+        self, text: str, file_path: str | list[str]
+    ) -> tuple[bool, str]:
+        """
+        Upload an image and post it with text to LinkedIn.
 
-        # TODO: find all mediaUploadType's. Determine use-case. Store in fs or stream?
-
-        if file_path_list is None:
-            file_path_list = []
-
-        # Accept either a plain string path or a list of path parts
-        if isinstance(file_path_list, str):
-            file_path = file_path_list
-            fname = path.basename(file_path)
+        Returns (success, message).
+        """
+        # Resolve file path
+        if isinstance(file_path, list):
+            resolved_path = os.path.join(*file_path)
+            fname = file_path[-1]
         else:
-            file_path = path.join(*file_path_list)
-            fname = file_path_list[-1]
+            resolved_path = file_path
+            fname = os.path.basename(file_path)
 
-        fbinary, fsize, ftype = get_file_data( file_path, protocol="rb", incl_meta=True )
+        if not os.path.exists(resolved_path):
+            return False, f"File not found: {resolved_path}"
+
+        content_type = mimetypes.guess_type(resolved_path)[0]
+        if not content_type:
+            return False, f"Cannot determine content type for: {resolved_path}"
+
+        fsize = os.path.getsize(resolved_path)
 
         payload = {
             "mediaUploadType": "IMAGE_SHARING",
             "fileSize": fsize,
-            "filename": fname
+            "filename": fname,
         }
 
-        content_type = get_content_type(file_path)
-
-        if not content_type:
-            return
-
         try:
-            response = requests.post(self.UPLOAD_ENDPOINT, headers=self.headers, data=json.dumps(payload))
+            # Step 1: Request upload URL
+            response = requests.post(
+                self.UPLOAD_ENDPOINT,
+                headers=self.headers,
+                data=json.dumps(payload),
+                timeout=30,
+            )
             response.raise_for_status()
+            self._check_session(response.headers)
 
-            self.check_session(response.headers)
+            data = response.json()["data"]["value"]
+            upload_endpoint = data["singleUploadUrl"]
 
-            data                              = response.json()["data"]["value"]
-            upload_endpoint                   = data["singleUploadUrl"]
-            self.headers["media-type-family"] = data["singleUploadHeaders"]["media-type-family"]
-            self.headers["content-type"]      = content_type
+            # Step 2: Upload the file (fixed: use context manager — no leak)
+            upload_headers = dict(self.headers)
+            upload_headers["media-type-family"] = data["singleUploadHeaders"]["media-type-family"]
+            upload_headers["content-type"] = content_type
 
-            response = requests.put(upload_endpoint, headers=self.headers, data=open(file_path, 'rb'))
-            response.raise_for_status()
+            with open(resolved_path, "rb") as f:
+                response = requests.put(
+                    upload_endpoint, headers=upload_headers, data=f, timeout=60
+                )
+                response.raise_for_status()
 
-            # image is uploaded. now post.
-            self.post(
+            # Step 3: Create post with the uploaded media
+            return self.post(
                 text,
                 [
-                    # video category has different keys
-                    { "category": MEDIA_CATEGORY.IMAGE.name, "mediaUrn": data["urn"], "tapTargets": [] }
-                ]
+                    {
+                        "category": MediaCategory.IMAGE.value,
+                        "mediaUrn": data["urn"],
+                        "tapTargets": [],
+                    }
+                ],
             )
 
         except requests.exceptions.RequestException as e:
-            custom_print(f"Error posting to LinkedIn: {e}")
+            msg = f"Error uploading/posting to LinkedIn: {e}"
+            logger.error(msg)
+            return False, msg
+
+    # ── Session Management ───────────────────────────────────────────────
+
+    def _check_session(self, resp_headers: dict | None = None) -> None:
+        """Check if LinkedIn returned new session cookies and update them."""
+        try:
+            if not resp_headers:
+                response = requests.get(self.BASE_URL, headers=self.headers, timeout=10)
+                response.raise_for_status()
+                resp_headers = dict(response.headers)
+
+            set_cookie = resp_headers.get("Set-Cookie", "")
+            if not set_cookie or "li_at=" not in set_cookie:
+                return
+
+            cookie_parts = set_cookie.split(";")
+            has_updates = False
+
+            for cookie_key in ("JSESSIONID", "li_at"):
+                if f"{cookie_key}=" not in set_cookie:
+                    continue
+
+                found = next(
+                    (part for part in cookie_parts if f"{cookie_key}=" in part),
+                    None,
+                )
+                if not found:
+                    continue
+
+                new_val = (
+                    found.split(f"{cookie_key}=")[1]
+                    .split(";")[0]
+                    .strip()
+                    .replace('\\"', "")
+                )
+                if new_val and self.cookies.get(cookie_key) != new_val:
+                    self.cookies[cookie_key] = new_val
+                    has_updates = True
+
+            if has_updates:
+                logger.info("LinkedIn session cookies refreshed")
+                self.headers["cookie"] = self._build_cookie_header()
+                self.headers["csrf-token"] = self.cookies.get("JSESSIONID", "")
+
+        except requests.exceptions.RequestException as e:
+            logger.warning("Error checking LinkedIn session: %s", e)

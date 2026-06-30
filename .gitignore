@@ -168,5 +168,9 @@ test/
 
 # Application Specific
 automator.db
+automator.*.db
 media/*.png
+media/generated/
+daemon_heartbeat.json
+automator.log
 =10.0.0
