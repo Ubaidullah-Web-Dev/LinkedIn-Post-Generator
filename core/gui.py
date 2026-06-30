@@ -84,7 +84,7 @@ Sidebar {
 }
 
 #ascii-banner {
-    color: $cyan;
+    color: $pink;
     text-style: bold;
     padding: 1 1 0 1;
     text-align: center;
