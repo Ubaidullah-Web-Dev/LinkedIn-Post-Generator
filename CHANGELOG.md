@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.5.0] – 06-30-2026
+### Added
+- **Deterministic Infographic Engine**: Uses PIL + NumPy to render 7 beautiful templates (Quote Card, Tips List, Comparison, Step Flow, Stat Highlight, Code Snippet, and Minimal Card) with auto-scaling, text-wrapping, and overflow fallback.
+- **Dynamic Themes**: Added 5 premium themes (Cyberpunk Neon, Minimal Monochrome, Soft Pastel, Glassmorphism, Bold High-Contrast) with built-in contrast validation.
+- **Config Hardening**: Integrated `python-dotenv` for secure, environment-variable based secrets handling (`LI_AT`, `JSESSIONID`, API keys).
+- **pyfiglet**: Added pyfiglet support for rendering compact terminal banners.
+
+### Changed
+- **TUI Redesign**: Fully overhauled GUI using Textual with a space-saving sidebar (width 28), compact ASCII monogram, and real-time generation previews.
+- **SQLite Engine**: Hardened WAL configuration and set `check_same_thread=False` to prevent thread conflicts during background jobs.
+
+### Fixed
+- Fixed button height layout squishing issues on terminal rendering.
+- Fixed SQLite database thread exception when generating content.
+
 ## [1.1.0] – 04-13-2025
 ### Added
 - **Updated RSS handling**  
