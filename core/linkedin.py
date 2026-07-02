@@ -160,9 +160,15 @@ class LinkedIn:
             upload_endpoint = data["singleUploadUrl"]
 
             # Step 2: Upload the file (fixed: use context manager — no leak)
-            upload_headers = dict(self.headers)
-            upload_headers["media-type-family"] = data["singleUploadHeaders"]["media-type-family"]
-            upload_headers["content-type"] = content_type
+            upload_headers = {
+                "cookie": self._build_cookie_header(),
+                "csrf-token": self.cookies.get("JSESSIONID", ""),
+                "User-Agent": self.headers["User-Agent"],
+                "content-type": content_type,
+            }
+            if "singleUploadHeaders" in data:
+                for k, v in data["singleUploadHeaders"].items():
+                    upload_headers[k] = v
 
             with open(resolved_path, "rb") as f:
                 response = requests.put(

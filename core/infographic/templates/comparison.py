@@ -8,6 +8,7 @@ from core.infographic.themes import Theme
 from core.infographic.primitives import (
     CANVAS_W, CANVAS_H, S, load_font,
     glass_panel, divider_line, checkmark, crossmark, tag_badge,
+    draw_rounded_rect_alpha, draw_line_alpha,
 )
 from core.infographic.layout import (
     LayoutBox, compute_regions, draw_text_aligned, measure_text,
@@ -87,10 +88,12 @@ class Comparison(BaseTemplate):
             rv = row.get("right", False) if isinstance(row, dict) else False
 
             if i % 2 == 0:
-                draw.rounded_rectangle(
-                    [PAD - S(4), y, CANVAS_W - PAD + S(4), y + ROW_H - S(2)],
-                    radius=S(6), fill=(255, 255, 255, 6),
-                )
+                img = draw._image if hasattr(draw, '_image') else None
+                box = [PAD - S(4), y, CANVAS_W - PAD + S(4), y + ROW_H - S(2)]
+                if img is not None and img.mode == "RGBA":
+                    draw_rounded_rect_alpha(img, box, radius=S(6), fill=(255, 255, 255, 6))
+                else:
+                    draw.rounded_rectangle(box, radius=S(6), fill=(255, 255, 255, 6))
 
             divider_line(draw, PAD, y, CANVAS_W - PAD, (*theme.text_muted, 25))
             draw.text((feat_x, y + S(13)), feat, font=f_feat, fill=theme.text_primary)
@@ -121,8 +124,15 @@ class Comparison(BaseTemplate):
 
         # Column dividers
         divider_line(draw, feat_end, TOP, feat_end, (*theme.text_muted, 30))
-        draw.line([(feat_end, TOP), (feat_end, TOP + table_h)], fill=(*theme.text_muted, 30), width=S(1))
-        draw.line([(mid_x, TOP), (mid_x, TOP + table_h)], fill=(*theme.text_muted, 30), width=S(1))
+        img = draw._image if hasattr(draw, '_image') else None
+        pts1 = [(feat_end, TOP), (feat_end, TOP + table_h)]
+        pts2 = [(mid_x, TOP), (mid_x, TOP + table_h)]
+        if img is not None and img.mode == "RGBA":
+            draw_line_alpha(img, pts1, (*theme.text_muted, 30), width=S(1))
+            draw_line_alpha(img, pts2, (*theme.text_muted, 30), width=S(1))
+        else:
+            draw.line(pts1, fill=(*theme.text_muted, 30), width=S(1))
+            draw.line(pts2, fill=(*theme.text_muted, 30), width=S(1))
 
         # Scores
         n = max(len(rows), 1)

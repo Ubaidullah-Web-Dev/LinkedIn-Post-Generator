@@ -7,7 +7,7 @@ from PIL import ImageDraw
 from core.infographic.themes import Theme
 from core.infographic.primitives import (
     CANVAS_W, CANVAS_H, S, load_font,
-    glass_panel, accent_bar, number_badge, tag_badge,
+    glass_panel, accent_bar, number_badge, tag_badge, draw_line_alpha,
 )
 from core.infographic.layout import (
     LayoutBox, compute_regions, wrap_text, measure_text,
@@ -93,10 +93,12 @@ class TipsList(BaseTemplate):
         if len(tips) > 1:
             first_cy = y + badge_r + S(4)
             last_cy = y + sum(tip_heights[:-1]) + badge_r + S(4)
-            draw.line(
-                [(badge_cx, first_cy + badge_r), (badge_cx, last_cy - badge_r)],
-                fill=(*theme.text_muted, 60), width=S(2),
-            )
+            img = draw._image if hasattr(draw, '_image') else None
+            pts = [(badge_cx, first_cy + badge_r), (badge_cx, last_cy - badge_r)]
+            if img is not None and img.mode == "RGBA":
+                draw_line_alpha(img, pts, (*theme.text_muted, 60), width=S(2))
+            else:
+                draw.line(pts, fill=(*theme.text_muted, 60), width=S(2))
 
         # Draw each tip
         accents = theme.accent_palette

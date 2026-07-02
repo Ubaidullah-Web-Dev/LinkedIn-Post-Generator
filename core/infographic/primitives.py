@@ -131,6 +131,75 @@ def radial_glow(
         draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(*color, a))
 
 
+# ── Alpha Drawing Helpers ───────────────────────────────────────────────────
+
+def draw_rounded_rect_alpha(
+    img: Image.Image,
+    box: list[int] | tuple[int, ...],
+    radius: int,
+    fill: tuple[int, ...] | None = None,
+    outline: tuple[int, ...] | None = None,
+    width: int = 1,
+) -> None:
+    """Draw a rounded rectangle with alpha blending on an RGBA image."""
+    x0, y0, x1, y1 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
+    w = x1 - x0
+    h = y1 - y0
+    if w <= 0 or h <= 0:
+        return
+
+    # Create temporary overlay
+    overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    odraw = ImageDraw.Draw(overlay)
+    odraw.rounded_rectangle(
+        [0, 0, w, h],
+        radius=radius,
+        fill=fill,
+        outline=outline,
+        width=width,
+    )
+    img.paste(overlay, (x0, y0), overlay)
+
+
+def draw_line_alpha(
+    img: Image.Image,
+    points: list[tuple[int, int]],
+    color: tuple[int, ...],
+    width: int = 1,
+) -> None:
+    """Draw a line with alpha blending on an RGBA image."""
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    x0, y0, x1, y1 = min(xs) - width, min(ys) - width, max(xs) + width, max(ys) + width
+    w = x1 - x0
+    h = y1 - y0
+    if w <= 0 or h <= 0:
+        return
+
+    overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    odraw = ImageDraw.Draw(overlay)
+    rel_points = [(p[0] - x0, p[1] - y0) for p in points]
+    odraw.line(rel_points, fill=color, width=width)
+    img.paste(overlay, (x0, y0), overlay)
+
+
+def draw_ellipse_alpha(
+    img: Image.Image,
+    box: list[int] | tuple[int, ...],
+    fill: tuple[int, ...],
+) -> None:
+    """Draw an ellipse with alpha blending on an RGBA image."""
+    x0, y0, x1, y1 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
+    w = x1 - x0
+    h = y1 - y0
+    if w <= 0 or h <= 0:
+        return
+    overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    odraw = ImageDraw.Draw(overlay)
+    odraw.ellipse([0, 0, w, h], fill=fill)
+    img.paste(overlay, (x0, y0), overlay)
+
+
 # ── Glass Panel ────────────────────────────────────────────────────────────
 
 def glass_panel(
@@ -144,17 +213,32 @@ def glass_panel(
 ) -> None:
     """Glassmorphism panel with subtle shadow."""
     x0, y0, x1, y1 = box
-    # Shadow
-    if shadow_offset > 0:
-        draw.rounded_rectangle(
-            [x0 + 2, y0 + shadow_offset, x1 + 2, y1 + shadow_offset],
-            radius=radius, fill=(0, 0, 0, 35),
+    img = draw._image if hasattr(draw, '_image') else None
+    if img is not None and img.mode == "RGBA":
+        # Shadow
+        if shadow_offset > 0:
+            draw_rounded_rect_alpha(
+                img,
+                [x0 + 2, y0 + shadow_offset, x1 + 2, y1 + shadow_offset],
+                radius=radius, fill=(0, 0, 0, 35),
+            )
+        # Panel
+        draw_rounded_rect_alpha(
+            img,
+            [x0, y0, x1, y1], radius=radius,
+            fill=fill, outline=border, width=border_width,
         )
-    # Panel
-    draw.rounded_rectangle(
-        [x0, y0, x1, y1], radius=radius,
-        fill=fill, outline=border, width=border_width,
-    )
+    else:
+        # Fallback to direct drawing
+        if shadow_offset > 0:
+            draw.rounded_rectangle(
+                [x0 + 2, y0 + shadow_offset, x1 + 2, y1 + shadow_offset],
+                radius=radius, fill=(0, 0, 0, 35),
+            )
+        draw.rounded_rectangle(
+            [x0, y0, x1, y1], radius=radius,
+            fill=fill, outline=border, width=border_width,
+        )
 
 
 # ── Divider Line ───────────────────────────────────────────────────────────
@@ -166,7 +250,11 @@ def divider_line(
     width: int = S(1),
 ) -> None:
     """Horizontal divider line."""
-    draw.line([(x0, y), (x1, y)], fill=color, width=width)
+    img = draw._image if hasattr(draw, '_image') else None
+    if img is not None and img.mode == "RGBA":
+        draw_line_alpha(img, [(x0, y), (x1, y)], color, width)
+    else:
+        draw.line([(x0, y), (x1, y)], fill=color, width=width)
 
 
 # ── Accent Bar ─────────────────────────────────────────────────────────────
@@ -178,10 +266,12 @@ def accent_bar(
     width: int = S(5),
 ) -> None:
     """Vertical accent bar (for section markers)."""
-    draw.rounded_rectangle(
-        [x, y, x + width, y + height],
-        radius=width // 2, fill=color,
-    )
+    img = draw._image if hasattr(draw, '_image') else None
+    box = [x, y, x + width, y + height]
+    if img is not None and img.mode == "RGBA":
+        draw_rounded_rect_alpha(img, box, radius=width // 2, fill=color)
+    else:
+        draw.rounded_rectangle(box, radius=width // 2, fill=color)
 
 
 # ── Number Badge ───────────────────────────────────────────────────────────
@@ -195,10 +285,13 @@ def number_badge(
     font: ImageFont.FreeTypeFont | None = None,
 ) -> None:
     """Numbered circle badge."""
-    draw.ellipse(
-        [cx - radius, cy - radius, cx + radius, cy + radius],
-        fill=bg_color,
-    )
+    img = draw._image if hasattr(draw, '_image') else None
+    box = [cx - radius, cy - radius, cx + radius, cy + radius]
+    if img is not None and img.mode == "RGBA" and len(bg_color) >= 4 and bg_color[3] < 255:
+        draw_ellipse_alpha(img, box, fill=bg_color)
+    else:
+        draw.ellipse(box, fill=bg_color)
+
     if font is None:
         font = load_font("Inter-Bold.ttf", int(radius * 1.2))
     text = str(number)
@@ -229,10 +322,12 @@ def tag_badge(
     tw, th = bb[2] - bb[0], bb[3] - bb[1]
     w = tw + padding_h * 2
     h = th + padding_v * 2
-    draw.rounded_rectangle(
-        [x, y, x + w, y + h],
-        radius=h // 2, fill=bg_color,
-    )
+    img = draw._image if hasattr(draw, '_image') else None
+    box = [x, y, x + w, y + h]
+    if img is not None and img.mode == "RGBA":
+        draw_rounded_rect_alpha(img, box, radius=h // 2, fill=bg_color)
+    else:
+        draw.rounded_rectangle(box, radius=h // 2, fill=bg_color)
     draw.text((x + padding_h, y + padding_v), text, font=font, fill=text_color)
     return w, h
 
@@ -267,12 +362,22 @@ def progress_bar(
     if radius is None:
         radius = height // 2
     progress = max(0.0, min(1.0, progress))
-    # Background
-    draw.rounded_rectangle([x, y, x + width, y + height], radius=radius, fill=bg_color)
-    # Fill
-    fill_w = int(width * progress)
-    if fill_w > radius * 2:
-        draw.rounded_rectangle([x, y, x + fill_w, y + height], radius=radius, fill=fill_color)
+    img = draw._image if hasattr(draw, '_image') else None
+
+    if img is not None and img.mode == "RGBA":
+        # Background
+        draw_rounded_rect_alpha(img, [x, y, x + width, y + height], radius=radius, fill=bg_color)
+        # Fill
+        fill_w = int(width * progress)
+        if fill_w > radius * 2:
+            draw_rounded_rect_alpha(img, [x, y, x + fill_w, y + height], radius=radius, fill=fill_color)
+    else:
+        # Background
+        draw.rounded_rectangle([x, y, x + width, y + height], radius=radius, fill=bg_color)
+        # Fill
+        fill_w = int(width * progress)
+        if fill_w > radius * 2:
+            draw.rounded_rectangle([x, y, x + fill_w, y + height], radius=radius, fill=fill_color)
 
 
 # ── Arrow ──────────────────────────────────────────────────────────────────
@@ -285,14 +390,37 @@ def arrow_right(
     head_size: int = S(8),
 ) -> None:
     """Draw a right-pointing arrow."""
-    # Shaft
-    draw.line([(x, cy), (x + length - head_size, cy)], fill=color, width=thickness)
-    # Arrowhead
-    draw.polygon([
-        (x + length, cy),
-        (x + length - head_size, cy - head_size // 2),
-        (x + length - head_size, cy + head_size // 2),
-    ], fill=color)
+    img = draw._image if hasattr(draw, '_image') else None
+    if img is not None and img.mode == "RGBA" and len(color) >= 4 and color[3] < 255:
+        # Get bounding box of the whole arrow
+        x0 = x
+        y0 = cy - head_size // 2
+        x1 = x + length
+        y1 = cy + head_size // 2
+        w = x1 - x0
+        h = y1 - y0
+        if w <= 0 or h <= 0:
+            return
+        overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        odraw = ImageDraw.Draw(overlay)
+        # Draw line relative to overlay
+        odraw.line([(0, h // 2), (length - head_size, h // 2)], fill=color, width=thickness)
+        # Draw polygon relative to overlay
+        odraw.polygon([
+            (length, h // 2),
+            (length - head_size, 0),
+            (length - head_size, h),
+        ], fill=color)
+        img.paste(overlay, (x0, y0), overlay)
+    else:
+        # Shaft
+        draw.line([(x, cy), (x + length - head_size, cy)], fill=color, width=thickness)
+        # Arrowhead
+        draw.polygon([
+            (x + length, cy),
+            (x + length - head_size, cy - head_size // 2),
+            (x + length - head_size, cy + head_size // 2),
+        ], fill=color)
 
 
 # ── Composite Helper ──────────────────────────────────────────────────────
@@ -301,7 +429,7 @@ def composite_layers(base: Image.Image, overlay: Image.Image, blur: int = 6) -> 
     """Single-pass alpha composite with optional blur on overlay."""
     if blur > 0:
         overlay = overlay.filter(ImageFilter.GaussianBlur(blur))
-    return Image.alpha_composite(base.convert("RGBA"), overlay).convert("RGB")
+    return Image.alpha_composite(base.convert("RGBA"), overlay)
 
 
 # ── Save Helper ───────────────────────────────────────────────────────────

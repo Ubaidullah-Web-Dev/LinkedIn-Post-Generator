@@ -59,7 +59,7 @@ class BaseTemplate(ABC):
         6. Save and return path
         """
         # 1. Base canvas
-        img = Image.new("RGB", (CANVAS_W, CANVAS_H))
+        img = Image.new("RGBA", (CANVAS_W, CANVAS_H))
         gradient_bg(img, theme.bg_top, theme.bg_bottom)
 
         # 2. Glow overlay (controlled by theme intensity)
@@ -86,7 +86,7 @@ class BaseTemplate(ABC):
                 img = composite_layers(img, debug_overlay, blur=0)
 
         # 6. Save
-        return save_image(img, save_path)
+        return save_image(img.convert("RGB"), save_path)
 
     def _draw_glows(self, draw: ImageDraw.ImageDraw, theme: Theme) -> None:
         """Default glow placement — templates can override."""
